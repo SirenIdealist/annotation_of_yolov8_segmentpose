@@ -28,8 +28,35 @@ class SegmentationPoseValidator(DetectionValidator):
         batch['masks'] = batch['masks'].to(self.device).float()
         batch['keypoints'] = batch['keypoints'].to(self.device).float()
         return batch
-
+    
     def init_metrics(self, model):
+        """Initialize metrics and select mask processing function based on save_json flag."""
+        super().init_metrics(model)
+        self.plot_masks = []
+        if self.args.save_json:
+            check_requirements('pycocotools>=2.0.6')
+            self.process = ops.process_mask_upsample  # more accurate
+        else:
+            self.process = ops.process_mask  # faster
+
+        # 动态获取关键点形状
+        nkpt, ndim = 17, 3  # fallback
+        try:
+            head = self.model.model[-1]
+            if hasattr(head, "kpt_shape"):
+                nkpt, ndim = head.kpt_shape
+                nkpt, ndim = int(nkpt), int(ndim)
+        except Exception:
+            pass
+        self.data['kpt_shape'] = [nkpt, ndim]
+        self.kpt_shape = self.data['kpt_shape']
+
+        # sigma: 若标准 COCO 17 点用预定义 OKS_SIGMA，否则用均匀分布
+        if nkpt == 17 and ndim >= 2:
+            self.sigma = OKS_SIGMA
+        else:
+            self.sigma = np.ones(nkpt) / max(nkpt, 1)
+    
         """Initialize metrics and select mask processing function based on save_json flag."""
         super().init_metrics(model)
         self.plot_masks = []
@@ -63,7 +90,93 @@ class SegmentationPoseValidator(DetectionValidator):
         proto = preds[1][-2] if len(preds[1]) == 4 else preds[1]  # second output is len 3 if pt, but only 1 if exported
         return p, proto
 
+    
     def update_metrics(self, preds, batch):
+        """Metrics."""
+        # 读取关键点形状（已在 init_metrics 保存）
+        nkpt, ndim = self.kpt_shape
+        nk = nkpt * ndim
+
+        for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
+            idx = batch['batch_idx'] == si
+            cls = batch['cls'][idx]
+            bbox = batch['bboxes'][idx]
+            kpts = batch['keypoints'][idx]
+            nl, npr = cls.shape[0], pred.shape[0]  # number of labels, predictions
+            # nk 替代硬编码 17
+            shape = batch['ori_shape'][si]
+            correct_masks = torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device)
+            correct_kpts = torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device)
+            correct_bboxes = torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device)
+            self.seen += 1
+
+            if npr == 0:
+                if nl:
+                    self.stats.append((correct_bboxes, correct_masks, correct_kpts, *torch.zeros(
+                        (2, 0), device=self.device), cls.squeeze(-1)))
+                    if self.args.plots:
+                        self.confusion_matrix.process_batch(detections=None, labels=cls.squeeze(-1))
+                continue
+            
+            # Masks: pred 列布局 [x1,y1,x2,y2,conf,cls, mask_coeff(nm), keypoints(nk)]
+            if nk > 0:
+                mask_coeff_cols = pred[:, 6:-nk] if pred.shape[1] > 6 + nk else pred[:, 6:6]
+            else:
+                mask_coeff_cols = pred[:, 6:]
+            midx = [si] if self.args.overlap_mask else idx
+            gt_masks = batch['masks'][midx]
+            pred_masks = self.process(proto, mask_coeff_cols, pred[:, :4], shape=batch['img'][si].shape[1:])
+
+            if self.args.single_cls:
+                pred[:, 5] = 0
+            predn = pred.clone()
+            ops.scale_boxes(batch['img'][si].shape[1:], predn[:, :4], shape,
+                            ratio_pad=batch['ratio_pad'][si])
+            
+            # 关键点
+            if nk > 0:
+                pred_kpts = predn[:, -nk:].view(npr, nkpt, ndim)
+                ops.scale_coords(batch['img'][si].shape[1:], pred_kpts, shape, ratio_pad=batch['ratio_pad'][si])
+            else:
+                pred_kpts = torch.zeros((npr, 0, 0), device=pred.device)
+
+            if nl:
+                height, width = batch['img'].shape[2:]
+                tbox = ops.xywh2xyxy(bbox) * torch.tensor(
+                    (width, height, width, height), device=self.device)
+                ops.scale_boxes(batch['img'][si].shape[1:], tbox, shape,
+                                ratio_pad=batch['ratio_pad'][si])
+                labelsn = torch.cat((cls, tbox), 1)
+                correct_bboxes = self._process_batch(predn, labelsn)
+                correct_masks = self._process_batch(predn,
+                                                    labelsn,
+                                                    pred_masks,
+                                                    gt_masks,
+                                                    overlap=self.args.overlap_mask,
+                                                    masks=True)
+                tkpts = kpts.clone()
+                if nkpt > 0:
+                    tkpts[..., 0] *= width
+                    tkpts[..., 1] *= height
+                    tkpts = ops.scale_coords(batch['img'][si].shape[1:], tkpts, shape,
+                                             ratio_pad=batch['ratio_pad'][si])
+                    correct_kpts = self._process_batch(predn[:, :6], labelsn, pred_kpts=pred_kpts, gt_kpts=tkpts)
+                if self.args.plots:
+                    self.confusion_matrix.process_batch(predn, labelsn)
+                    
+            self.stats.append((correct_bboxes, correct_masks, correct_kpts, pred[:, 4], pred[:, 5], cls.squeeze(-1)))
+
+            pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
+            if self.args.plots and self.batch_i < 3:
+                self.plot_masks.append(pred_masks[:15].cpu())
+
+            if self.args.save_json:
+                pm = ops.scale_image(pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+                                     shape,
+                                     ratio_pad=batch['ratio_pad'][si])
+                self.pred_to_json(predn, batch['im_file'][si], pm)
+    
+    
         """Metrics."""
         for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
             idx = batch['batch_idx'] == si
@@ -200,15 +313,24 @@ class SegmentationPoseValidator(DetectionValidator):
 
     def plot_predictions(self, batch, preds, ni):
         """Plots batch predictions with masks and bounding boxes."""
-        pred_kpts = torch.cat([p[:, -17*3:].view(-1, *self.kpt_shape)[:15] for p in preds[0]], 0)
+        nkpt, ndim = self.kpt_shape
+        nk = nkpt * ndim
+        if nk > 0:
+            pred_kpts = torch.cat(
+                [p[:, -nk:].view(-1, nkpt, ndim)[:15] for p in preds[0]],
+                0)
+        else:
+            pred_kpts = torch.zeros((0, 0, 0), device=preds[0][0].device)
+
         plot_images(batch['img'],
                     *output_to_target(preds[0], max_det=15),
                     torch.cat(self.plot_masks, dim=0) if len(self.plot_masks) else self.plot_masks,
                     kpts=pred_kpts,
                     paths=batch['im_file'],
                     fname=self.save_dir / f'val_batch{ni}_pred.jpg',
-                    names=self.names)  # pred
+                    names=self.names)
         self.plot_masks.clear()
+    
 
     def pred_to_json(self, predn, filename, pred_masks):
         """Save one JSON result."""
