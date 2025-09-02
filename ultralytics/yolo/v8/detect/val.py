@@ -1,18 +1,29 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
+# os/Path 处理路径、检测文件存在等
 import os
 from pathlib import Path
 
+# 用于布尔矩阵、匹配结果处理和统计（AP 匹配布尔表等）
 import numpy as np
+# 核心张量、GPU 运算
 import torch
 
+# 新（v8）数据管线：Dataset + DataLoader 构造
 from ultralytics.yolo.data import build_dataloader, build_yolo_dataset
+# 旧版兼容（v5 风格），逐步弃用
 from ultralytics.yolo.data.dataloaders.v5loader import create_dataloader
+# 验证基类：封装公共流程（循环、计时、回调、结果汇总）
 from ultralytics.yolo.engine.validator import BaseValidator
+# DEFAULT_CFG: 默认超参；LOGGER: 日志输出；colorstr: 终端彩色字符串；ops: 常用操作集合（NMS、坐标变换等）
 from ultralytics.yolo.utils import DEFAULT_CFG, LOGGER, colorstr, ops
+# 动态检查依赖（如 pycocotools）
 from ultralytics.yolo.utils.checks import check_requirements
+# ConfusionMatrix: 统计 TP/FP/FN（按类别）；DetMetrics: 聚合并计算 P/R/mAP；box_iou: 计算 IoU 矩阵
 from ultralytics.yolo.utils.metrics import ConfusionMatrix, DetMetrics, box_iou
+# output_to_target: 把预测结果转为统一 target-like 格式用于可视化；plot_images: 绘制图像 + 标注/预测框
 from ultralytics.yolo.utils.plotting import output_to_target, plot_images
+# 在 DDP / DataParallel 中取真实模型（model.module）
 from ultralytics.yolo.utils.torch_utils import de_parallel
 
 
@@ -20,16 +31,23 @@ class DetectionValidator(BaseValidator):
 
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize detection model with necessary variables and settings."""
-        super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        self.args.task = 'detect'
-        self.is_coco = False
+        super().__init__(dataloader, save_dir, pbar, args, _callbacks) # 调父类：设置设备、dataloader、保存目录、回调等
+        self.args.task = 'detect' # 强制任务类型 'detect'：后续分支逻辑（如 JSON 导出）
+        self.is_coco = False # 标记数据是否是标准 COCO val2017（影响是否保存 JSON 并用 pycocotools 验证）
         self.class_map = None
-        self.metrics = DetMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
+        self.metrics = DetMetrics(save_dir=self.save_dir, on_plot=self.on_plot) # 内部持有累积分布并负责最终 AP 计算
         self.iouv = torch.linspace(0.5, 0.95, 10)  # iou vector for mAP@0.5:0.95
         self.niou = self.iouv.numel()
 
     def preprocess(self, batch):
-        """Preprocesses batch of images for YOLO training."""
+        """Preprocesses batch of images for YOLO training.
+        - 将图像搬到 device，半精度可减少显存。
+        - 归一化到 [0,1]。
+        - batch_idx/cls/bboxes 迁移到 GPU。
+        - self.lb：如果 args.save_hybrid（半自动标注模式）就拼接 (cls,bbox) 以便做 “标签 + 预测” 混合增强（此处仅缓存）。
+        - 返回 batch。
+            （注意：验证不做强增强，只做基本 resize/letterbox）
+        """
         batch['img'] = batch['img'].to(self.device, non_blocking=True)
         batch['img'] = (batch['img'].half() if self.args.half else batch['img'].float()) / 255
         for k in ['batch_idx', 'cls', 'bboxes']:

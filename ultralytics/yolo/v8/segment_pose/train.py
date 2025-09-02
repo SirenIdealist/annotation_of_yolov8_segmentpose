@@ -17,7 +17,7 @@ class SegmentationPoseTrainer(v8.detect.DetectionTrainer):
         overrides['task'] = 'segment_pose'
         super().__init__(cfg, overrides, _callbacks)
 
-    def get_model(self, cfg=None, weights=None, verbose=True):
+    def get_model(self, cfg=None, weights=None, verbose=True): # 构建对应任务的模型类并按需加载权重
         """Return SegmentationPoseModel initialized with specified config and weights."""
         model = SegmentationPoseModel(cfg, ch=3, nc=self.data['nc'], data_kpt_shape=self.data['kpt_shape'], verbose=verbose and RANK == -1)
         if weights:
@@ -59,5 +59,42 @@ def train(cfg=DEFAULT_CFG, use_python=False):
         trainer.train()
 
 
+"""代码改进建议：
+- 增加 set_model_attributes 覆写，确保 resume/切换数据安全。
+- plot_training_samples 添加关键点显示。
+- plot_metrics 传递 pose=True。
+- 验证可在 loss_names 中排序分类（可读性：box, cls, dfl | seg | pose, kobj）。
+- 引入多任务损失自适应加权（可选）。
+- 在 validator 或日志里明确多任务指标列名 (mAP_box, mAP_mask, mAP_kpt)
+
+
+# ...existing code...
+class SegmentationPoseTrainer(v8.detect.DetectionTrainer):
+    # ...existing code...
+
+    def set_model_attributes(self):
+        super().set_model_attributes()
+        # 确保关键点形状同步
+        if hasattr(self.data, 'kpt_shape'):
+            self.model.kpt_shape = self.data['kpt_shape']
+
+    def plot_training_samples(self, batch, ni):
+        images = batch['img']
+        masks = batch.get('masks')
+        kpts = batch.get('keypoints')
+        cls = batch['cls'].squeeze(-1)
+        bboxes = batch['bboxes']
+        paths = batch['im_file']
+        batch_idx = batch['batch_idx']
+        plot_images(images, batch_idx, cls, bboxes, masks, kpts=kpts,
+                    paths=paths, fname=self.save_dir / f'train_batch{ni}.jpg')
+
+    def plot_metrics(self):
+        plot_results(file=self.csv, segment=True, pose=True)
+# ...existing code...
+"""
+
+
 if __name__ == '__main__':
+    # 入口 train()：统一解析 cfg 中 model/data/device → 组装 overrides → 初始化各自 Trainer → 调用 trainer.train()
     train()
