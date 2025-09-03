@@ -17,8 +17,8 @@ import shutil
     - labels/train/xxx.txt ...
     - labels/val/xxx.txt ...
     - 内容格式为：cls_id x_center y_center width height kpt1_x kpt1_y kpt1_vis ... kpt4_x kpt4_y kpt4_vis seg_point1_x seg_point1_y ...
-- train.txt，里面存放着训练集所有图片的相对路径
-- val.txt，里面存放着验证集所有图片的相对路径
+- train.txt，里面存放着训练集所有图片的绝对路径
+- val.txt，里面存放着验证集所有图片的绝对路径
     """
 
 def ensure_dir(path, clean=False):
@@ -26,7 +26,7 @@ def ensure_dir(path, clean=False):
         shutil.rmtree(path)
     Path(path).mkdir(parents=True, exist_ok=True)
 
-def convert_one_json(json_path, label_dir, image_dir, txt_list_path, rel_img_prefix):
+def convert_one_json(json_path, label_dir, image_dir, txt_list_path):
     # 删除已有标签目录和txt文件，实现覆盖
     ensure_dir(label_dir, clean=True)
     if os.path.exists(txt_list_path):
@@ -89,8 +89,8 @@ def convert_one_json(json_path, label_dir, image_dir, txt_list_path, rel_img_pre
         with open(label_path, 'w', encoding='utf-8') as f:
             for l in label_lines:
                 f.write(l + '\n')
-        rel_img_path = os.path.join(rel_img_prefix, file_name).replace("\\", "/")
-        image_paths.append(rel_img_path)
+        abs_img_path = os.path.abspath(os.path.join(image_dir, file_name))
+        image_paths.append(abs_img_path)
     with open(txt_list_path, 'w', encoding='utf-8') as f:
         for p in image_paths:
             f.write(f'{p}\n')
@@ -106,15 +106,13 @@ if __name__ == '__main__':
         json_path=os.path.join(ann_dir, 'peduncle_train_503.json'),
         label_dir=os.path.join(label_dir, 'train'),
         image_dir=os.path.join(img_dir, 'train'),
-        txt_list_path=os.path.join(data_root, 'train.txt'),
-        rel_img_prefix='images/train'
+        txt_list_path=os.path.join(data_root, 'train.txt')
     )
     # 验证集
     convert_one_json(
         json_path=os.path.join(ann_dir, 'peduncle_val_145.json'),
         label_dir=os.path.join(label_dir, 'val'),
         image_dir=os.path.join(img_dir, 'val'),
-        txt_list_path=os.path.join(data_root, 'val.txt'),
-        rel_img_prefix='images/val'
+        txt_list_path=os.path.join(data_root, 'val.txt')
     )
     print('Done!')
