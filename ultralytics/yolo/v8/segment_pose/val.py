@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
+import yaml
 
 from ultralytics.yolo.utils import DEFAULT_CFG, LOGGER, NUM_THREADS, ops
 from ultralytics.yolo.utils.checks import check_requirements
@@ -26,11 +27,12 @@ class SegmentationPoseValidator(DetectionValidator):
         batch['keypoints'] = batch['keypoints'].to(self.device).float()
         return batch
 
+
     def init_metrics(self, model):
         """
         初始化指标：
         - 只保留一次 super().init_metrics
-        - 动态解析关键点形状，支持自定义 kpt_shape
+        - 基于数据集的配置文件动态解析关键点形状，支持自定义 kpt_shape
         """
         super().init_metrics(model)
         self.plot_masks = []
@@ -40,38 +42,16 @@ class SegmentationPoseValidator(DetectionValidator):
         else:
             self.process = ops.process_mask
 
-        # 依据配置文件动态获取关键点的形状 (nkpt, ndim)
-        nkpt, ndim = self.model.yaml['kpt_shape']  # 默认无关键点
-        # 1) 模型 head 属性
-        try:
-            head = self.model.model[-1]
-            if hasattr(head, "kpt_shape"):
-                ks = head.kpt_shape
-                if isinstance(ks, (list, tuple)) and len(ks) == 2:
-                    nkpt, ndim = int(ks[0]), int(ks[1])
-        except Exception:
-            pass
-        # 2) model.yaml 中
-        if hasattr(self.model, "yaml") and isinstance(self.model.yaml, dict):
-            ks_yaml = self.model.yaml.get('kpt_shape')
-            if isinstance(ks_yaml, (list, tuple)) and len(ks_yaml) == 2:
-                nkpt, ndim = int(ks_yaml[0]), int(ks_yaml[1])
-        # 3) 数据集配置里（可选）
-        if isinstance(self.data, dict):
-            ds_ks = self.data.get('kpt_shape')
-            if isinstance(ds_ks, (list, tuple)) and len(ds_ks) == 2:
-                nkpt, ndim = int(ds_ks[0]), int(ds_ks[1])
+        # --- 安全获取 kpt_shape ---
+        with open(self.args.data, 'r', encoding='utf-8') as f:
+            dataset_file = yaml.safe_load(f)
 
-        nkpt = max(nkpt, 0)
-        ndim = max(ndim, 0)
-        self.data['kpt_shape'] = [nkpt, ndim]
-        self.kpt_shape = self.data['kpt_shape']
-
-        # OKS sigma
-        if nkpt == 17 and ndim >= 2:
-            self.sigma = OKS_SIGMA
-        else:
-            self.sigma = np.ones(nkpt, dtype=np.float32) / nkpt if nkpt > 0 else np.array([])
+        self.kpt_shape = dataset_file.get('kpt_shape')
+        
+        # 判断是否是COCO人体关键点检测的17个关键点形式，这关系到是否启用COCO格式的OKS_SIGMA
+        is_coco_type_pose = self.kpt_shape == [17, 3]
+        nkpt, ndim = self.kpt_shape
+        self.sigma = OKS_SIGMA if is_coco_type_pose else np.ones(nkpt) / nkpt
 
     def get_desc(self):
         return ('%22s' + '%11s' * 14) % ('Class', 'Images', 'Instances', 'Box(P', 'R', 'mAP50', 'mAP50-95)', 'Mask(P',
@@ -94,7 +74,7 @@ class SegmentationPoseValidator(DetectionValidator):
         统一的动态关键点与 mask 统计逻辑
         删除原重复的第二段 for 循环与硬编码 17*3
         """
-        nkpt, ndim = self.kpt_shape
+        nkpt, ndim = self.kpt_shape # 动态解析关键点的数量及其维度
         nk = nkpt * ndim  # 每个预测行末尾关键点元素数量
 
         for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):

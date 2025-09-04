@@ -15,9 +15,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     weights = args.weights if args.weights else f'yolov8{args.model}-seg.pt'
     model = YOLO(model=MODEL_PATH, task='segment_pose')
-    print("--"*50)   
     if args.mode == 'train':        
-        model.train(data=DATA_PATH, name=f'train_segmentposecoco_{args.model}', lr0=1e-4, epochs=200, batch=32, device='cpu')
+        model.train(data=DATA_PATH, name=f'train_segmentposecoco_{args.model}', lr0=1e-4, epochs=500, batch=32)
         # model = YOLO(model=args.weights, task='segment_pose')
         # model.train(resume=True)
     elif args.mode == 'val':

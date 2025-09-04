@@ -142,6 +142,10 @@ wandb/
 
 .DS_Store
 
+# ignore vscode and github config files
+.vscode/
+.github
+
 # Neural Network weights -----------------------------------------------------------------------------------------------
 weights/
 *.weights
