@@ -31,13 +31,15 @@ class SegmentationPoseTrainer(v8.detect.DetectionTrainer):
 
     def plot_training_samples(self, batch, ni):
         """Creates a plot of training sample images with labels and box coordinates."""
+        
         images = batch['img']
         masks = batch['masks']
         cls = batch['cls'].squeeze(-1)
         bboxes = batch['bboxes']
         paths = batch['im_file']
         batch_idx = batch['batch_idx']
-        plot_images(images, batch_idx, cls, bboxes, masks, paths=paths, fname=self.save_dir / f'train_batch{ni}.jpg')
+        keypoints = batch['keypoints'] # 从batch中解析出'keypoints'
+        plot_images(images, batch_idx, cls, bboxes, masks, kpts=keypoints, paths=paths, fname=self.save_dir / f'train_batch{ni}.jpg') # 在train batch中新增keypoints的绘制
 
     def plot_metrics(self):
         """Plots training/val metrics."""
