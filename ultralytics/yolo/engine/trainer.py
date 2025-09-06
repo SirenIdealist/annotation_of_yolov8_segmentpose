@@ -329,7 +329,17 @@ class BaseTrainer:
                 # Forward
                 with torch.cuda.amp.autocast(self.amp):
                     batch = self.preprocess_batch(batch)
-                    self.loss, self.loss_items = self.model(batch)
+                    """
+                    这里进行前向计算，batch是一个字典，拥有['im_file', 'ori_shape', 'resized_shape', 'masks', 'img', 'cls', 'bboxes', 'keypoints', 'batch_idx']这些key
+                    batch['resized_shape'] 一般设成 640*640
+                    batch['masks'].shape = torch.Size([bs, N, N])
+                    batch['img'].shape = torch.Size([bs, channel, resized_shape_H, resized_shape_W])
+                    batch['cls'].shape = torch.Size([len(batch_idx), 1])
+                    batch['bboxes'].shape = torch.Size([len(batch_idx), 4]), 4: bbox_x, bbox_y, bbox_h, bbox_w
+                    batch['keypoints'].shape = torch.Size([len(batch_idx), kpt_shape[0], kpt_shape[1]]),如COCO数据集kpt_shape:(4, 3)
+                    batch['batch_idx'] 表示当前batch所有检测框中的mask和keypoints所属类别，其总数即为当前batch的Bbox总数
+                    """
+                    self.loss, self.loss_items = self.model(batch) 
                     if RANK != -1:
                         self.loss *= world_size
                     self.tloss = (self.tloss * i + self.loss_items) / (i + 1) if self.tloss is not None \
