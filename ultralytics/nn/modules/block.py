@@ -36,12 +36,17 @@ class DFL(nn.Module):
 
 
 class Proto(nn.Module):
-    """YOLOv8 mask Proto module for segmentation models."""
+    """YOLOv8 mask Proto module for segmentation models.
+    Proto 是分割头（Segmentation Head）中的“原型（prototype）特征生成器”。
+    它产出一组共享的基础掩码（basis masks / prototypes），然后每个检测框对应一串系数，对这些原型做线性组合得到实例掩码。
+    这样避免为每个目标单独预测整幅二值图，显著节省计算与显存
+    Proto 是“共享基础掩码生成器”，通过少量可学习原型 + 动态线性组合重构每个实例的精细掩码
+    """
 
     def __init__(self, c1, c_=256, c2=32):  # ch_in, number of protos, number of masks
         super().__init__()
-        self.cv1 = Conv(c1, c_, k=3)
-        self.upsample = nn.ConvTranspose2d(c_, c_, 2, 2, 0, bias=True)  # nn.Upsample(scale_factor=2, mode='nearest')
+        self.cv1 = Conv(c1, c_, k=3) # c1 = ch[0], 即多尺度特征的第一层（即分辨率最高的那一层）；c_：将c1映射到更高的通道，以学习更丰富的特征
+        self.upsample = nn.ConvTranspose2d(c_, c_, 2, 2, 0, bias=True)  # nn.Upsample(scale_factor=2, mode='nearest')，转置卷积、上采样
         self.cv2 = Conv(c_, c_, k=3)
         self.cv3 = Conv(c_, c2)
 
