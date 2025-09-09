@@ -670,6 +670,7 @@ class v8SegmentationPoseLoss(v8DetectionLoss):
             loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()
 
         # 归一与超参加权：
+        # 多任务学习的权重计算方式，目前是基于self.hyp的线性加权，默认参数来自于`ultralytics/cfg/default.yaml`
         loss[0] *= self.hyp.box
         loss[1] *= self.hyp.box / batch_size  # seg 按 batch 归一
         loss[2] *= self.hyp.cls

@@ -86,11 +86,16 @@ weight_decay: 0.0005  # (float) optimizer weight decay 5e-4
 warmup_epochs: 3.0  # (float) warmup epochs (fractions ok)
 warmup_momentum: 0.8  # (float) warmup initial momentum
 warmup_bias_lr: 0.1  # (float) warmup initial bias lr
+
+######################### -------------------------------
+# 在这里定义了多任务学习的默认参数
 box: 7.5  # (float) box loss gain
 cls: 0.5  # (float) cls loss gain (scale with pixels)
 dfl: 1.5  # (float) dfl loss gain
 pose: 12.0  # (float) pose loss gain
 kobj: 1.0  # (float) keypoint obj loss gain
+######################### -------------------------------
+
 label_smoothing: 0.0  # (float) label smoothing (fraction)
 nbs: 64  # (int) nominal batch size
 hsv_h: 0.015  # (float) image HSV-Hue augmentation (fraction)
