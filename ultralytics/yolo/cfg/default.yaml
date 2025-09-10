@@ -1,116 +1,149 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 # Default training settings and hyperparameters for medium-augmentation COCO training
 
-task: detect  # (str) YOLO task, i.e. detect, segment, classify, pose
-mode: train  # (str) YOLO mode, i.e. train, val, predict, export, track, benchmark
+# 基础任务设置
+task: detect  # YOLO任务类型：detect(检测)、segment(分割)、classify(分类)、pose(姿态)
+mode: train   # YOLO模式：train(训练)、val(验证)、predict(预测)、export(导出)、track(跟踪)、benchmark(基准测试)
 
-# Train settings -------------------------------------------------------------------------------------------------------
-model:  # (str, optional) path to model file, i.e. yolov8n.pt, yolov8n.yaml
-data:  # (str, optional) path to data file, i.e. coco128.yaml
-epochs: 100  # (int) number of epochs to train for
-patience: 50  # (int) epochs to wait for no observable improvement for early stopping of training
-batch: 16  # (int) number of images per batch (-1 for AutoBatch)
-imgsz: 640  # (int) size of input images as integer or w,h
-save: True  # (bool) save train checkpoints and predict results
-save_period: -1 # (int) Save checkpoint every x epochs (disabled if < 1)
-cache: False  # (bool) True/ram, disk or False. Use cache for data loading
-device:  # (int | str | list, optional) device to run on, i.e. cuda device=0 or device=0,1,2,3 or device=cpu
-workers: 8  # (int) number of worker threads for data loading (per RANK if DDP)
-project:  # (str, optional) project name
-name:  # (str, optional) experiment name, results saved to 'project/name' directory
-exist_ok: False  # (bool) whether to overwrite existing experiment
-pretrained: True  # (bool | str) whether to use a pretrained model (bool) or a model to load weights from (str)
-optimizer: auto  # (str) optimizer to use, choices=[SGD, Adam, Adamax, AdamW, NAdam, RAdam, RMSProp, auto]
-verbose: True  # (bool) whether to print verbose output
-seed: 0  # (int) random seed for reproducibility
-deterministic: True  # (bool) whether to enable deterministic mode
-single_cls: False  # (bool) train multi-class data as single-class
-rect: False  # (bool) rectangular training if mode='train' or rectangular validation if mode='val'
-cos_lr: False  # (bool) use cosine learning rate scheduler
-close_mosaic: 0  # (int) disable mosaic augmentation for final epochs
-resume: False  # (bool) resume training from last checkpoint
-amp: True  # (bool) Automatic Mixed Precision (AMP) training, choices=[True, False], True runs AMP check
-fraction: 1.0  # (float) dataset fraction to train on (default is 1.0, all images in train set)
-profile: False  # (bool) profile ONNX and TensorRT speeds during training for loggers
-# Segmentation
-overlap_mask: True  # (bool) masks should overlap during training (segment train only)
-mask_ratio: 4  # (int) mask downsample ratio (segment train only)
-# Classification
-dropout: 0.0  # (float) use dropout regularization (classify train only)
+# 训练设置 (Train settings) -------------------------------------------------------------------------------------------------------
+model:          # 模型文件路径，如 yolov8n.pt, yolov8n.yaml
+data:           # 数据配置文件路径，如 coco128.yaml
+epochs: 100     # 训练轮数
+patience: 50    # 早停耐心值：连续50轮无改善则停止训练
+batch: 16       # 批次大小，-1表示自动批次大小
+imgsz: 640      # 输入图像尺寸
+save: True      # 是否保存训练检查点和预测结果
+save_period: -1 # 每x轮保存一次检查点（<1时禁用）
+cache: False    # 数据加载缓存：True/ram(内存缓存)、disk(磁盘缓存)、False(无缓存)
+device:         # 运行设备：cuda device=0 或 device=0,1,2,3 或 device=cpu
+workers: 8      # 数据加载的工作线程数
+project:        # 项目名称
+name:           # 实验名称，结果保存到 'project/name' 目录
+exist_ok: False # 是否覆盖已存在的实验
+pretrained: True # 是否使用预训练模型
+optimizer: auto  # 优化器：SGD, Adam, Adamax, AdamW, NAdam, RAdam, RMSProp, auto
+verbose: True   # 是否打印详细输出
+seed: 0         # 随机种子，用于结果复现
+deterministic: True # 是否启用确定性模式
+single_cls: False   # 是否将多类数据作为单类训练
+rect: False     # 是否使用矩形训练/验证
+cos_lr: False   # 是否使用余弦学习率调度器
+close_mosaic: 0 # 在最后几轮禁用马赛克增强
+resume: False   # 是否从最后检查点恢复训练
+amp: True       # 自动混合精度训练
+fraction: 1.0   # 训练数据集使用比例（1.0表示使用全部数据）
+profile: False  # 是否在训练期间分析ONNX和TensorRT速度
 
-# Val/Test settings ----------------------------------------------------------------------------------------------------
-val: True  # (bool) validate/test during training
-split: val  # (str) dataset split to use for validation, i.e. 'val', 'test' or 'train'
-save_json: False  # (bool) save results to JSON file
-save_hybrid: False  # (bool) save hybrid version of labels (labels + additional predictions)
-conf:  # (float, optional) object confidence threshold for detection (default 0.25 predict, 0.001 val)
-iou: 0.7  # (float) intersection over union (IoU) threshold for NMS
-max_det: 300  # (int) maximum number of detections per image
-half: False  # (bool) use half precision (FP16)
-dnn: False  # (bool) use OpenCV DNN for ONNX inference
-plots: True  # (bool) save plots during train/val
+# 分割专用参数
+overlap_mask: True  # 训练时mask是否允许重叠
+mask_ratio: 4       # mask下采样比例
 
-# Prediction settings --------------------------------------------------------------------------------------------------
-source:  # (str, optional) source directory for images or videos
-show: False  # (bool) show results if possible
-save_txt: False  # (bool) save results as .txt file
-save_conf: False  # (bool) save results with confidence scores
-save_crop: False  # (bool) save cropped images with results
-show_labels: True  # (bool) show object labels in plots
-show_conf: True  # (bool) show object confidence scores in plots
-vid_stride: 1  # (int) video frame-rate stride
-line_width:   # (int, optional) line width of the bounding boxes, auto if missing
-visualize: False  # (bool) visualize model features
-augment: False  # (bool) apply image augmentation to prediction sources
-agnostic_nms: False  # (bool) class-agnostic NMS
-classes:  # (int | list[int], optional) filter results by class, i.e. class=0, or class=[0,2,3]
-retina_masks: False  # (bool) use high-resolution segmentation masks
-boxes: True  # (bool) Show boxes in segmentation predictions
+# 分类专用参数
+dropout: 0.0  # dropout正则化率
 
-# Export settings ------------------------------------------------------------------------------------------------------
-format: torchscript  # (str) format to export to, choices at https://docs.ultralytics.com/modes/export/#export-formats
-keras: False  # (bool) use Kera=s
-optimize: False  # (bool) TorchScript: optimize for mobile
-int8: False  # (bool) CoreML/TF INT8 quantization
-dynamic: False  # (bool) ONNX/TF/TensorRT: dynamic axes
-simplify: False  # (bool) ONNX: simplify model
-opset:  # (int, optional) ONNX: opset version
-workspace: 4  # (int) TensorRT: workspace size (GB)
-nms: False  # (bool) CoreML: add NMS
+# 验证/测试设置 (Val/Test settings) ----------------------------------------------------------------------------------------------------
+val: True       # 训练时是否进行验证
+split: val      # 验证使用的数据集分割：'val', 'test', 'train'
+save_json: False    # 是否保存结果为JSON文件
+save_hybrid: False  # 是否保存混合版本标签
 
-# Hyperparameters ------------------------------------------------------------------------------------------------------
-lr0: 0.01  # (float) initial learning rate (i.e. SGD=1E-2, Adam=1E-3)
-lrf: 0.01  # (float) final learning rate (lr0 * lrf)
-momentum: 0.937  # (float) SGD momentum/Adam beta1
-weight_decay: 0.0005  # (float) optimizer weight decay 5e-4
-warmup_epochs: 3.0  # (float) warmup epochs (fractions ok)
-warmup_momentum: 0.8  # (float) warmup initial momentum
-warmup_bias_lr: 0.1  # (float) warmup initial bias lr
+conf:           # ⭐ 目标置信度阈值（详细解释见下方）
+# conf 是目标置信度阈值，用于过滤检测结果：
+#   - 模型对每个检测框都会输出一个置信度分数（0-1之间）
+#   - conf 阈值决定了哪些检测结果被保留
+#   - 只有置信度 ≥ conf 的检测框才会被输出
+#   - "default 0.25 predict, 0.001 val" 的含义：预测时只显示置信度 ≥ 25% 的检测结果；验证时保留置信度 ≥ 0.1% 的所有检测结果用于评估
+# 为什么两个模式使用不同的默认值：
+#   - 预测模式使用0.25的原因：
+#      - 用户通常只想看到"比较确定"的检测结果
+#      - 避免显示太多低质量的误检
+#   - 验证模式使用0.001的原因：
+#     - 需要计算完整的PR曲线和mAP指标
+#     - 评估指标需要在不同置信度下的完整性能
+#     - 0.001基本等于保留所有检测，让评估指标自己决定阈值
+
+iou: 0.7        # NMS的IoU阈值，NMS的目的是解决同一个目标被多次检测的问题
+# 假设检测到同一个人的3个框：
+#   - 框A: 置信度0.9, 位置[100,100,200,200]
+#   - 框B: 置信度0.8, 位置[105,105,205,205]  # 与A高度重叠
+#   - 框C: 置信度0.7, 位置[300,300,400,400]  # 与A,B不重叠
+
+# 当iou=0.7时：
+#   - 按置信度排序：A > B > C
+#   - 保留A（最高置信度）
+#   -计算A与B的IoU ≈ 0.85 > 0.7 → 删除B
+#   -计算A与C的IoU ≈ 0.0 < 0.7 → 保留C
+#   - 最终结果：保留A和C
+# 先用conf过滤低置信度检测，再用iou对剩余检测进行NMS去重
+
+max_det: 300    # 每张图像最大检测数量
+half: False     # 是否使用半精度(FP16)
+dnn: False      # 是否使用OpenCV DNN进行ONNX推理
+plots: True     # 是否保存训练/验证图表。当val: True且plots: True时，YOLOv8会在验证阶段生成可视化图片，这些图片通常包含Ground Truth
+
+# 预测设置 (Prediction settings) --------------------------------------------------------------------------------------------------
+source:         # 图像或视频的源目录
+show: False     # 是否显示结果
+save_txt: False # 是否将结果保存为.txt文件
+save_conf: False    # 是否保存置信度分数
+save_crop: False    # 是否保存裁剪的图像
+show_labels: True   # 是否在图中显示标签
+show_conf: True     # 是否在图中显示置信度分数
+vid_stride: 1       # 视频帧率步长
+line_width:         # 边界框线宽，空则自动
+visualize: False    # 是否可视化模型特征
+augment: False      # 是否对预测源应用图像增强
+agnostic_nms: False # 是否使用类别无关的NMS
+classes:            # 按类别过滤结果，如 class=0 或 class=[0,2,3]
+retina_masks: False # 是否使用高分辨率分割mask
+boxes: True         # 在分割预测中是否显示边界框
+
+# 导出设置 (Export settings) ------------------------------------------------------------------------------------------------------
+format: torchscript # 导出格式
+keras: False    # 是否使用Keras
+optimize: False # TorchScript是否为移动端优化
+int8: False     # CoreML/TF INT8量化
+dynamic: False  # ONNX/TF/TensorRT动态轴
+simplify: False # ONNX模型简化
+opset:          # ONNX操作集版本
+workspace: 4    # TensorRT工作空间大小(GB)
+nms: False      # CoreML是否添加NMS
+
+# 多任务学习超参数 (Hyperparameters) ------------------------------------------------------------------------------------------------------
+lr0: 0.01           # 初始学习率
+lrf: 0.01           # 最终学习率 (lr0 * lrf)
+momentum: 0.937     # SGD动量/Adam beta1
+weight_decay: 0.0005 # 优化器权重衰减
+warmup_epochs: 3.0  # 预热轮数
+warmup_momentum: 0.8 # 预热初始动量
+warmup_bias_lr: 0.1 # 预热初始偏置学习率
 
 ######################### -------------------------------
 # 在这里定义了多任务学习的默认参数
-box: 7.5  # (float) box loss gain
-cls: 0.5  # (float) cls loss gain (scale with pixels)
-dfl: 1.5  # (float) dfl loss gain
-pose: 12.0  # (float) pose loss gain
-kobj: 1.0  # (float) keypoint obj loss gain
+box: 7.5    # 边界框损失权重
+cls: 0.5    # 分类损失权重
+dfl: 1.5    # 分布焦点损失权重
+pose: 12.0  # 姿态损失权重
+kobj: 1.0   # 关键点目标损失权重
 ######################### -------------------------------
 
-label_smoothing: 0.0  # (float) label smoothing (fraction)
-nbs: 64  # (int) nominal batch size
-hsv_h: 0.015  # (float) image HSV-Hue augmentation (fraction)
-hsv_s: 0.7  # (float) image HSV-Saturation augmentation (fraction)
-hsv_v: 0.4  # (float) image HSV-Value augmentation (fraction)
-degrees: 0.0  # (float) image rotation (+/- deg)
-translate: 0.1  # (float) image translation (+/- fraction)
-scale: 0.5  # (float) image scale (+/- gain)
-shear: 0.0  # (float) image shear (+/- deg)
-perspective: 0.0  # (float) image perspective (+/- fraction), range 0-0.001
-flipud: 0.0  # (float) image flip up-down (probability)
-fliplr: 0.5  # (float) image flip left-right (probability)
-mosaic: 1.0  # (float) image mosaic (probability)
-mixup: 0.0  # (float) image mixup (probability)
-copy_paste: 0.0  # (float) segment copy-paste (probability)
+
+# 数据增强参数
+label_smoothing: 0.0  # 标签平滑
+nbs: 64              # 标称批次大小
+hsv_h: 0.015         # HSV色调增强
+hsv_s: 0.7           # HSV饱和度增强  
+hsv_v: 0.4           # HSV明度增强
+degrees: 0.0         # 图像旋转角度
+translate: 0.1       # 图像平移比例
+scale: 0.5           # 图像缩放增益
+shear: 0.0           # 图像剪切角度
+perspective: 0.0     # 图像透视变换
+flipud: 0.0          # 上下翻转概率
+fliplr: 0.5          # 左右翻转概率
+mosaic: 1.0          # 马赛克增强概率
+mixup: 0.0           # 混合增强概率
+copy_paste: 0.0      # 分割复制粘贴概率
 
 # Custom config.yaml ---------------------------------------------------------------------------------------------------
 cfg:  # (str, optional) for overriding defaults.yaml

@@ -231,13 +231,17 @@ class SegmentPose(Detect):
         p = self.proto(x[0])  # mask protos (B, npr, Hp, Wp)
         bs = p.shape[0]  # batch size
 
-        # 2) mask coefficients，同 Segment：(B, nm, sum(H_i*W_i))
+        # 2) mask coefficients，同 Segment：(B, nm, H * W))
         mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm, -1) for i in range(self.nl)], 2)  # mask coefficients
 
-        # 3) keypoints：对每个尺度取 cv5 输出 -> reshape concat -> (B, nk, sum(H_i*W_i))
+        # 3) keypoints：对每个尺度取 cv5 输出 -> reshape concat -> (B, nk, H * W)
         kpt = torch.cat([self.cv5[i](x[i]).view(bs, self.nk, -1) for i in range(self.nl)], -1)  # (bs, nk, h*w)
 
         # 4) 调用 Detect 的 forward 得到检测输出
+        # x 是一个self.nl长度的列表:
+        #   - x[0].shape = torch.Size([1, 65, 32, 32]), 其中65 = nc + self.reg_max * 4；32 = imgsz / stride[0]
+        #   - x[1].shape = torch.Size([1, 65, 16, 16]),
+        #   - x[2].shape = torch.Size([1, 65,  8,  8])
         x = self.detect(self, x)
         if self.training:
             # 训练：返回原始检测 logits 列表 x、mc、proto p、以及原始 keypoint logits kpt（后续 loss 用）
@@ -265,14 +269,16 @@ class SegmentPose(Detect):
         - self.anchors, self.strides 是在 Detect.forward 中由 make_anchors 填充的，全局共享。
         """
         ndim = self.kpt_shape[1]
-        # 直接复制 tensor 避免覆盖原始 kpts（后续训练时仍需原始 kpt）
+        # 直接复制 tensor 避免覆盖原始 kpts（后续训练时仍需原始 kpt）不在原张量上写，避免影响后续 loss（训练反向需要原始 logits）
         y = kpts.clone()
         if ndim == 3:
             # 对每个关键点的 visibility/score 通道做 inplace sigmoid，索引为 2::3（假设 ndim==3）
-            y[:, 2::3].sigmoid_()  # inplace sigmoid
+            y[:, 2::3].sigmoid_()  # inplace sigmoid. 切片 2::3 取出每组的第 3 个值（v），用 sigmoid_ 压缩到 0~1
         # x 通道索引为 0::ndim，y 通道索引为 1::ndim
         # anchors 和 strides 的形状与 (2, N) 或 (N,) 等有关，具体在 make_anchors 中生成
-        # 将网络输出变换到图像尺度
+        # self.anchors[0] 和 self.anchors[1] 分别是每个网格点的中心坐标
+        # self.strides 是下采样倍数，将特征图坐标映射到原图像素坐标。 例如：stride = 16 表示特征图上1个像素对应原图16个像素
+        # 将网络输出变换到图像尺度，分别对关键点的 x 坐标 和 y 坐标 进行解码，将网络输出的相对网格偏移值转换为图像像素坐标
         y[:, 0::ndim] = (y[:, 0::ndim] * 2.0 + (self.anchors[0] - 0.5)) * self.strides
         y[:, 1::ndim] = (y[:, 1::ndim] * 2.0 + (self.anchors[1] - 0.5)) * self.strides
         return y

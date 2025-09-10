@@ -346,6 +346,23 @@ class BaseTrainer:
                         else self.loss_items
 
                 # Backward
+                """
+                PyTorch 自动混合精度训练 (AMP, Automatic Mixed Precision) 中的关键组件，用于解决 半精度浮点数训练时的梯度下溢问题
+                1. 背景：AMP 训练中的梯度下溢问题,半精度浮点数的限制
+                    - FP16 的数值范围：约 $6 \times 10^{-8}$ 到 $6.5 \times 10^{4}$
+                    - 梯度通常很小：深度学习中梯度值经常在 $10^{-7}$ 到 $10^{-4}$ 范围
+                    - 下溢风险：小梯度在 FP16 中可能变成 0，导致参数无法更新
+                2. 核心作用：
+                    - 放大损失值 → 放大梯度 → 防止 FP16 下的梯度下溢
+                    - 内存节省: FP16 占用内存是 FP32 的一半; 可以训练更大的模型或使用更大的 batch size
+                    - 保持数值稳定性:
+                        - 维持梯度精度：小梯度不会丢失信息
+                        - 避免训练停滞：防止参数更新为 0
+                        - 保证收敛性：与 FP32 训练等效的数值行为
+                    - 配合 GradScaler 的自动缩放调节机制
+                    - 在优化器中恢复梯度原始大小，确保参数更新正确
+                    - 实现高效的混合精度训练，兼顾速度和精度
+                """
                 self.scaler.scale(self.loss).backward()
 
                 # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
